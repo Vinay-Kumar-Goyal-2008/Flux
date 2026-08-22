@@ -1,0 +1,105 @@
+# ==========================================
+# Environment Variables & Secrets (CRITICAL)
+# ==========================================
+.env
+.env.*
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+**/.env
+**/.env.*
+!**/.env.example
+
+# ==========================================
+# Python & Virtual Environments
+# ==========================================
+venv/
+.venv/
+env/
+ENV/
+**/venv/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Node / React Native / Expo
+# ==========================================
+node_modules/
+**/node_modules/
+.expo/
+**/.expo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.metro-health-check*
+*.tsbuildinfo
+expo-env.d.ts
+web-build/
+
+# ==========================================
+# Native Mobile Builds
+# ==========================================
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+/dell-flood-app/ios
+/dell-flood-app/android
+
+# ==========================================
+# Databases, Vector DB & Storage
+# ==========================================
+*.db
+*.sqlite
+*.sqlite3
+chroma_data/
+**/chroma_data/
+
+# ==========================================
+# Large ML Model Weights (>100MB Git limit)
+# ==========================================
+*.pth
+*.pt
+*.onnx
+*.bin
+*.h5
+*.ckpt
+best_model_focal.pth
+
+# ==========================================
+# IDE & System Files
+# ==========================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.claude/
+**/.claude/
+*.swp
+*.swo
