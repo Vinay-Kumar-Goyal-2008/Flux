@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.3580, 29.7520] },
+      "properties": { "name": "George R. Brown Convention Center", "type": "emergency_shelter", "capacity": 5000, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.3621, 29.7508] },
+      "properties": { "name": "Toyota Center Emergency Complex", "type": "stadium_shelter", "capacity": 3000, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.3670, 29.7420] },
+      "properties": { "name": "Midtown Community Evacuation Center", "type": "community_center", "capacity": 800, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.3850, 29.7800] },
+      "properties": { "name": "Heights High School Gymnasium Shelter", "type": "school", "capacity": 1200, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.3400, 29.7200] },
+      "properties": { "name": "University of Houston Campus Safe Zone", "type": "university", "capacity": 2500, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.3980, 29.7150] },
+      "properties": { "name": "Texas Medical Center Primary Relief Shelter", "type": "hospital", "capacity": 1500, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-95.4050, 29.7750] },
+      "properties": { "name": "Memorial Park Emergency Outpost", "type": "community_center", "capacity": 600, "city": "Houston" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.0812, 29.9511] },
+      "properties": { "name": "Caesars Superdome Shelter of Last Resort", "type": "stadium_shelter", "capacity": 10000, "city": "New Orleans" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.0620, 29.9430] },
+      "properties": { "name": "Morial Convention Center Relief Base", "type": "emergency_shelter", "capacity": 6000, "city": "New Orleans" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.0050, 29.9800] },
+      "properties": { "name": "Lower 9th Ward High School Gym", "type": "school", "capacity": 1000, "city": "New Orleans" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-91.1700, 30.4500] },
+      "properties": { "name": "Baton Rouge River Center Relief Shelter", "type": "community_center", "capacity": 2000, "city": "Baton Rouge" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-91.1800, 30.4150] },
+      "properties": { "name": "LSU Assembly Center Safe Refuge", "type": "university", "capacity": 4000, "city": "Baton Rouge" }
+    }
+  ]
+}
