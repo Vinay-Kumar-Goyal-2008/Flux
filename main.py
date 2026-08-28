@@ -1,102 +1,111 @@
 """
-main.py
-Entry point for the Mireye disaster response pipeline (Day 3-7).
+CLI entrypoint for the Mireye disaster intelligence pipeline.
 
-Commands:
-    python main.py run      --polygon houston_harvey       # Flood dossier (Day 3-4)
-    python main.py evacuate --polygon houston_harvey       # Shelters + routes (Day 6-7)
-    python main.py usage                                   # Check API credits
-    python main.py catalog                                 # List all 250+ fields
-    python main.py quote flood_risk terrain --points 10   # Cost estimate
-
-Demo polygons:
-    houston_harvey       -- Hurricane Harvey 2017, Houston TX
-    new_orleans_katrina  -- Hurricane Katrina 2005, New Orleans LA
-    baton_rouge_2016     -- August 2016 Louisiana floods
+Subcommands:
+  run       — Fetch physical context for a flood polygon (Day 3-5)
+  evacuate  — Nearest shelters + elevation-aware evacuation routes (Day 6-7)
+  predict   — Predictive flood-prone hazard layer & TWI modeling (Day 8-9)
+  usage     — Check remaining Mireye API credits
+  catalog   — List available Mireye data fields
+  quote     — Estimate credit cost for a query
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
+from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# ── Validate token ─────────────────────────────────────────────────────────────
-TOKEN = os.getenv("MIREYE_API_TOKEN", "")
-if not TOKEN:
-    print("\nNo API token found!")
-    print("   Create a .env file with:  MIREYE_API_TOKEN=your_jwt_token_here")
-    print("   See .env.example for reference.\n")
-    sys.exit(1)
-
-from api.client import MireyeClient, DISASTER_PRESETS
-from pipeline.flood_polygon import get_demo_polygon, list_demo_polygons
+from api.client import MireyeClient, MireyeAPIError
 from pipeline.extractor import extract_flood_dossier
+from pipeline.flood_polygon import get_demo_polygon, DEMO_POLYGONS
 from routing.evacuate import plan_evacuation
 from routing.evacuation_engine import run_full_evacuation_pipeline
+from pipeline.flood_prone import analyze_flood_prone_hazards
+from visualization.map_plotter import plot_evacuation_map
 
 
 def cmd_run(args: argparse.Namespace) -> None:
-    """Run the extraction pipeline for a flood polygon."""
+    """Fetch physical context for a flood polygon and print structured summary."""
     try:
         polygon = get_demo_polygon(args.polygon)
     except ValueError as e:
-        print(f"\n✗ {e}\n")
+        print(f"\nERROR: {e}\n")
         sys.exit(1)
 
-    presets = args.presets if args.presets else DISASTER_PRESETS
+    print(f"\nRunning Mireye extraction for: {polygon.name}")
+    print(f"Sampling mode: {args.sampling} ({args.num_points} points)")
+    print(f"Presets: {args.presets}\n")
 
-    dossier = extract_flood_dossier(
-        polygon=polygon,
-        presets=presets,
-        n_sample_points=args.points,
-        use_cache=not args.no_cache,
-        verbose=True,
-    )
+    try:
+        dossier = extract_flood_dossier(
+            polygon=polygon,
+            sampling=args.sampling,
+            num_interior_points=args.num_points,
+            presets=args.presets,
+            use_cache=not args.no_cache,
+            verbose=True,
+        )
+    except MireyeAPIError as e:
+        print(f"\nAPI ERROR [{e.status_code}]: {e.message}")
+        if e.error_code:
+            print(f"Error Code: {e.error_code}")
+        print("\nTip: Check your MIREYE_API_TOKEN in .env or run: python main.py usage\n")
+        sys.exit(1)
 
-    # Pretty print summary
-    print("\n" + "="*60)
-    print("  FLOOD SITUATIONAL DOSSIER — SUMMARY")
-    print("="*60)
-    summary = dossier.summary
-    if summary:
-        print(json.dumps(summary.model_dump(), indent=2, default=str))
+    dossier.print_summary()
 
-    print(f"\n  Full dossier saved to: output/flood_dossier_{dossier.polygon_hash}.json")
+    out_path = Path("output") / f"dossier_{polygon.name}.json"
+    out_path.parent.mkdir(exist_ok=True)
+    out_path.write_text(dossier.to_json_file(out_path), encoding="utf-8")
+    print(f"\nFull dossier saved to: {out_path}\n")
 
 
-def cmd_check_usage(args: argparse.Namespace) -> None:
-    """Check current API credit usage."""
-    print("\n  Checking Mireye credit usage...\n")
+def cmd_check_usage(_args: argparse.Namespace) -> None:
+    """Check remaining Mireye API credits."""
+    print("\n  Checking Mireye API credit balance...\n")
     with MireyeClient() as client:
         try:
-            usage = client.check_usage()
-            print(json.dumps(usage, indent=2))
-        except Exception as e:
-            print(f"ERROR: {e}")
+            data = client.check_usage()
+            plan_obj = data.get("plan", {})
+            plan_name = plan_obj.get("name", "Build") if isinstance(plan_obj, dict) else str(plan_obj)
+            credits_obj = data.get("credits", {})
+            limit = credits_obj.get("included", 25000)
+            used = credits_obj.get("used", 0)
+            remaining = credits_obj.get("remaining", limit - used)
+            period = data.get("period", {})
+            start = period.get("start", "")
+            end = period.get("end", "")
+
+            print(f"  Plan:             {plan_name}")
+            print(f"  Monthly Limit:    {limit:,} credits")
+            print(f"  Credits Used:     {used:,} credits")
+            print(f"  Remaining:        {remaining:,} credits")
+            print(f"  Billing Period:   {start} -> {end}")
+            pct = (used / limit * 100) if limit else 0
+            print(f"  Utilization:      {pct:.1f}%\n")
+        except MireyeAPIError as e:
+            print(f"  ERROR [{e.status_code}]: {e.message}\n")
 
 
-def cmd_catalog(args: argparse.Namespace) -> None:
-    """Fetch and display the full field catalog."""
+def cmd_catalog(_args: argparse.Namespace) -> None:
+    """List all available fields in the Mireye catalog."""
     print("\n  Fetching Mireye field catalog (no auth needed)...\n")
     with MireyeClient() as client:
         try:
             catalog = client.get_field_catalog()
-            # Just print field names and units for readability
-            fields = catalog.get("fields", {})
+            fields = catalog.get("fields", []) if isinstance(catalog, dict) else catalog
             print(f"  Total fields available: {len(fields)}\n")
-            for name, meta in list(fields.items())[:30]:  # Show first 30
-                unit = meta.get("unit", "—")
-                source = meta.get("source", "—")
-                print(f"  {name:<45} [{unit}]  — {source}")
-            if len(fields) > 30:
-                print(f"\n  ... and {len(fields) - 30} more fields.")
+            if isinstance(fields, list) and fields and isinstance(fields[0], dict):
+                for f in fields[:30]:
+                    print(f"  - {f.get('name', 'N/A')}: {f.get('description', '')[:60]}...")
+            elif isinstance(fields, dict):
+                for name, info in list(fields.items())[:30]:
+                    desc = info.get("description", "") if isinstance(info, dict) else str(info)
+                    print(f"  - {name}: {desc[:60]}...")
+            print(f"\n  (Showing first 30 of {len(fields)} fields)\n")
         except Exception as e:
-            print(f"ERROR: {e}")
+            print(f"  ERROR: {e}\n")
 
 
 def cmd_quote(args: argparse.Namespace) -> None:
@@ -159,33 +168,90 @@ def cmd_evacuate(args: argparse.Namespace) -> None:
     print(f"  Full plan: output/evacuation_{polygon.name}.json")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Mireye Disaster Response Pipeline",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+def cmd_predict(args: argparse.Namespace) -> None:
+    """Day 8-9: Compute Topographic Wetness Index & Predictive Flood-Prone Hazard Model."""
+    if getattr(args, "physical_data", None):
+        from pipeline.physical_data_hazard_engine import process_physical_data_pipeline
+        input_path = Path(args.physical_data)
+        process_physical_data_pipeline(input_path)
+        return
+
+    try:
+        polygon = get_demo_polygon(args.polygon)
+    except ValueError as e:
+        print(f"\nERROR: {e}\n")
+        sys.exit(1)
+
+    grid_dim = int(args.grid_points ** 0.5)
+    hazard_data = analyze_flood_prone_hazards(
+        polygon=polygon,
+        buffer_km=args.buffer,
+        grid_dimension=max(3, grid_dim),
+        use_live_api=not args.no_live_api,
+        verbose=True
     )
 
+    # Render combined interactive HTML map
+    poly_coords = [(p.lat, p.lng) for p in polygon.coordinates]
+    
+    # Load cluster & evacuation data if available
+    evac_file = Path("output") / f"evacuation_clusters_{polygon.name}.json"
+    clusters = []
+    evac_results = []
+    if evac_file.exists():
+        try:
+            evac_data = json.loads(evac_file.read_text(encoding="utf-8"))
+            evac_results = evac_data.get("clusters_evacuation_plan", [])
+            for res in evac_results:
+                clusters.append({
+                    "cluster_id": res.get("cluster_id"),
+                    "centroid": [res.get("cluster_centroid", {}).get("lat", 0.0), res.get("cluster_centroid", {}).get("lon", 0.0)],
+                    "population_estimate": res.get("population_estimate"),
+                    "building_count": res.get("building_count")
+                })
+        except Exception:
+            pass
+
+    map_path = plot_evacuation_map(
+        polygon_coords=poly_coords,
+        clusters=clusters,
+        evacuation_results=evac_results,
+        hazard_cells=hazard_data.get("predictive_grid_cells", []),
+        output_filename=f"predictive_hazard_map_{polygon.name}.html"
+    )
+    print(f"  [Visual Map] Interactive predictive hazard map saved to: {map_path}\n")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Mireye Disaster Intelligence Engine — Flood Inundation & Physical Context Extraction",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     subparsers = parser.add_subparsers(dest="command")
 
-    # run
-    run_parser = subparsers.add_parser("run", help="Extract flood dossier (Day 3-4)")
+    # run (Day 3-5)
+    run_parser = subparsers.add_parser("run", help="Fetch physical context for a polygon (Day 3-5)")
     run_parser.add_argument(
         "--polygon", "-p",
         default="houston_harvey",
-        choices=list_demo_polygons(),
-        help="Demo polygon to use (default: houston_harvey)",
+        help="Polygon name to process",
     )
     run_parser.add_argument(
-        "--points", "-n",
+        "--sampling", "-s",
+        choices=["centroid", "grid", "boundary", "all"],
+        default="grid",
+        help="Spatial sampling strategy (default: grid)",
+    )
+    run_parser.add_argument(
+        "--num-points", "-n",
         type=int,
-        default=10,
-        help="Number of sample points inside polygon (max 25, default: 10)",
+        default=5,
+        help="Number of points to sample (default: 5)",
     )
     run_parser.add_argument(
         "--presets",
         nargs="+",
-        default=None,
+        default=["flood_risk", "natural_hazard", "terrain", "building_lookup"],
         help="Mireye presets to fetch",
     )
     run_parser.add_argument(
@@ -194,12 +260,12 @@ def main() -> None:
         help="Skip cache and always hit the API",
     )
 
-    # evacuate  (Day 6-7)
+    # evacuate (Day 6-7)
     evac_parser = subparsers.add_parser("evacuate", help="Find shelters + evacuation routes (Day 6-7)")
     evac_parser.add_argument(
         "--polygon", "-p",
         default="houston_harvey",
-        help="Demo or model county polygon (e.g., daviess_county_in, greene_county_in, knox_county_in, etc.)",
+        help="Demo or model county polygon (e.g., philadelphia_county_pa, charleston_county_sc, etc.)",
     )
     evac_parser.add_argument(
         "--top",
@@ -225,6 +291,36 @@ def main() -> None:
         help="Run DBSCAN clustering across flood zone buildings and route per cluster",
     )
 
+    # predict (Day 8-9)
+    predict_parser = subparsers.add_parser("predict", help="Predictive flood-prone hazard & TWI modeling (Day 8-9)")
+    predict_parser.add_argument(
+        "--physical-data", "-f",
+        default=None,
+        help="Path to pre-extracted physical_data.json file to process all regions",
+    )
+    predict_parser.add_argument(
+        "--polygon", "-p",
+        default="philadelphia_county_pa",
+        help="Target county/polygon for predictive modeling",
+    )
+    predict_parser.add_argument(
+        "--grid-points", "-n",
+        type=int,
+        default=25,
+        help="Dense grid sample count (e.g., 25 or 36)",
+    )
+    predict_parser.add_argument(
+        "--buffer", "-b",
+        type=float,
+        default=6.0,
+        help="Buffer radius in km around flood boundary (default: 6.0km)",
+    )
+    predict_parser.add_argument(
+        "--no-live-api",
+        action="store_true",
+        help="Use offline fallback without calling Mireye API",
+    )
+
     # usage
     subparsers.add_parser("usage", help="Check API credit balance")
 
@@ -238,13 +334,15 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Default to 'run' if no subcommand given
+    # Dispatch commands
     if args.command is None or args.command == "run":
         if args.command is None:
             args = parser.parse_args(["run"] + sys.argv[1:])
         cmd_run(args)
     elif args.command == "evacuate":
         cmd_evacuate(args)
+    elif args.command == "predict":
+        cmd_predict(args)
     elif args.command == "usage":
         cmd_check_usage(args)
     elif args.command == "catalog":
