@@ -1,9 +1,14 @@
 import os
 import numpy as np
 
-# Try importing CV2 and PyTorch with dummy fallback classes for compilation safety
+# Independent imports for Torch and OpenCV with safe fallbacks
 try:
     import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -44,6 +49,18 @@ except ImportError:
         class ReLU:
             def __init__(self, *args, **kwargs):
                 pass
+        class BatchNorm2d:
+            def __init__(self, *args, **kwargs):
+                pass
+        class LayerNorm:
+            def __init__(self, *args, **kwargs):
+                pass
+        class MultiheadAttention:
+            def __init__(self, *args, **kwargs):
+                pass
+        class Parameter:
+            def __init__(self, *args, **kwargs):
+                pass
     
     class DummyTensor:
         def squeeze(self):
@@ -52,6 +69,24 @@ except ImportError:
             return self
         def numpy(self):
             return np.zeros((512, 512))
+
+def resize_2d(arr, target_size=(512, 512)):
+    """Robust 2D array resize using CV2, PIL, or Torch interpolate."""
+    if arr.shape == target_size:
+        return arr.astype(np.float32)
+    if HAS_CV2:
+        return cv2.resize(arr.astype(np.float32), target_size, interpolation=cv2.INTER_LINEAR)
+    try:
+        from PIL import Image
+        img = Image.fromarray(arr.astype(np.float32))
+        resized = img.resize(target_size, resample=Image.BILINEAR)
+        return np.array(resized, dtype=np.float32)
+    except Exception:
+        if HAS_TORCH:
+            t = torch.from_numpy(arr).float().unsqueeze(0).unsqueeze(0)
+            out = F.interpolate(t, size=target_size, mode="bilinear", align_corners=False)
+            return out.squeeze().numpy()
+        return arr.astype(np.float32)
 
 
 class GatedFusionModule(nn.Module):
@@ -320,65 +355,106 @@ class SegFormerMiTB2Fusion(nn.Module):
         }
 
     def run_inference(self, sar_vv, sar_vh, opt_r, opt_g, opt_b, opt_nir=None, cloud_cover_pct=0.0, lat=None, lon=None):
+        # -----------------------------------------------------------------------
+        # CRITICAL: This model was trained on Sentinel-2 surface reflectance.
+        # Sentinel-2 reflectance value ranges:
+        #   Water:      R~0.02-0.08, G~0.05-0.12, B~0.10-0.20, NIR~0.01-0.04
+        #   Vegetation: R~0.05-0.12, G~0.08-0.15, B~0.05-0.10, NIR~0.30-0.60
+        #   Urban/Soil: R~0.12-0.25, G~0.10-0.20, B~0.08-0.18, NIR~0.15-0.35
+        # SAR values must be raw dB (NOT normalized): water ~-20 to -30, dry ~-5 to -15
+        # -----------------------------------------------------------------------
+
+        # 1. Resize optical channels
+        opt_r_resized = resize_2d(opt_r, (512, 512))
+        opt_g_resized = resize_2d(opt_g, (512, 512))
+        opt_b_resized = resize_2d(opt_b, (512, 512))
+
+        # 2. Convert Google Maps RGB tiles (0-255) to Sentinel-2 reflectance scale (0.0-0.5).
+        #    The model was trained on Sentinel-2 reflectance, NOT on 8-bit rendered tile imagery.
+        #    Real Sentinel-2 surface reflectance for land is typically 0.05 - 0.40.
+        #    Google Maps renders at full 8-bit gamma, so we divide by ~700 (not 255) to land in 0.05-0.35 range.
+        if np.max(opt_r_resized) > 1.5:
+            # Input is in [0, 255] range — convert to sentinel-2 reflectance scale
+            r_norm = np.clip(opt_r_resized / 700.0, 0.0, 0.50)
+            g_norm = np.clip(opt_g_resized / 700.0, 0.0, 0.50)
+            b_norm = np.clip(opt_b_resized / 700.0, 0.0, 0.50)
+        else:
+            # Already in [0, 1] — scale to sentinel-2 reflectance range
+            r_norm = np.clip(opt_r_resized * 0.38, 0.0, 0.50)
+            g_norm = np.clip(opt_g_resized * 0.38, 0.0, 0.50)
+            b_norm = np.clip(opt_b_resized * 0.38, 0.0, 0.50)
+
+        # 3. Synthesize Sentinel-2 NIR band (B08) from RGB.
+        #    This is the MOST critical step — NIR determines flood vs dry.
+        #    - Vegetation: NIR >> Green (strong chlorophyll reflection), typically 0.30-0.60
+        #    - Water:      NIR << all visible bands (water absorbs NIR), typically 0.01-0.04
+        #    - Urban/Soil: NIR ~ 1.0-1.5x Red, moderate, typically 0.10-0.30
+
+        # 4. SAR channels: MUST be raw dB values (how the model was trained).
+        #    DO NOT normalize to [0,1] — the model learned patterns from dB values directly.
+        #    Water: VV ~ -20 to -30 dB (specular bounce = low backscatter)
+        #    Dry land: VV ~ -5 to -15 dB (diffuse scattering = higher backscatter)
+        sar_vv_resized = resize_2d(sar_vv, (512, 512))
+        sar_vh_resized = resize_2d(sar_vh, (512, 512))
+
+        if np.min(sar_vv_resized) < -2.0:
+            # Already in dB range — use directly
+            vv_db = np.clip(sar_vv_resized, -40.0, 5.0).astype(np.float32)
+            vh_db = np.clip(sar_vh_resized, -45.0, 0.0).astype(np.float32)
+        elif np.max(sar_vv_resized) > 1.5:
+            # In [0, 255]: scale back to dB. 0=~-35dB, 255=~0dB
+            vv_db = np.clip((sar_vv_resized / 255.0) * 35.0 - 35.0, -40.0, 5.0).astype(np.float32)
+            vh_db = np.clip((sar_vh_resized / 255.0) * 40.0 - 40.0, -45.0, 0.0).astype(np.float32)
+        else:
+            # In [0, 1]: scale to dB
+            vv_db = np.clip(sar_vv_resized * 35.0 - 35.0, -40.0, 5.0).astype(np.float32)
+            vh_db = np.clip(sar_vh_resized * 40.0 - 40.0, -45.0, 0.0).astype(np.float32)
+
+        # 3b. Synthesize NIR using both optical AND SAR signals
+        if opt_nir is None:
+            lum = (r_norm + g_norm + b_norm) / 3.0
+
+            # Optical water detection: blue-dominant low-luminance pixels
+            is_clear_water = (b_norm > r_norm * 1.15) & (g_norm > r_norm * 1.05) & (lum < 0.12)
+            is_dark_water  = (lum < 0.04) & (b_norm >= g_norm)
+            is_optical_water = is_clear_water | is_dark_water
+
+            # SAR water: very low backscatter (specular reflection from smooth water surface)
+            # This catches turbid brown floodwater that looks like soil optically
+            is_sar_water = (vv_db < -18.0)
+
+            # Combined water: optical OR SAR evidence
+            is_water = is_optical_water | is_sar_water
+
+            # Vegetation: green clearly exceeds red and blue (chlorophyll signature)
+            is_veg = (g_norm > r_norm * 1.12) & (g_norm > b_norm * 1.08) & (~is_water)
+
+            # NIR synthesis in correct reflectance units:
+            nir_water = np.clip(lum * 0.15, 0.005, 0.04)        # water/flood: NIR ~0.01-0.04
+            nir_veg   = np.clip(g_norm * 3.5, 0.25, 0.60)        # vegetation: NIR ~0.25-0.60
+            nir_urban = np.clip(r_norm * 1.2 + g_norm * 0.1,     # urban/soil: NIR ~0.10-0.30
+                                0.08, 0.32)
+
+            nir_norm = np.where(is_water, nir_water,
+                       np.where(is_veg,   nir_veg,
+                                           nir_urban)).astype(np.float32)
+        else:
+            nir_resized = resize_2d(opt_nir, (512, 512))
+            if np.max(nir_resized) > 1.5:
+                nir_norm = np.clip(nir_resized / 700.0, 0.0, 0.60)
+            else:
+                nir_norm = np.clip(nir_resized * 0.38, 0.0, 0.60)
+
+        # 5. Run the PyTorch SegFormer model with correctly scaled inputs
         if HAS_TORCH and not self.is_mock:
+
             try:
-                # 1. Optical channels: [Red, Green, Blue, NIR] normalized to [0.0, 1.0]
-                opt_r_resized = cv2.resize(opt_r, (512, 512)).astype(np.float32)
-                opt_g_resized = cv2.resize(opt_g, (512, 512)).astype(np.float32)
-                opt_b_resized = cv2.resize(opt_b, (512, 512)).astype(np.float32)
-                
-                if opt_nir is None:
-                    # Realistic NIR approximation: water absorbs NIR, vegetation reflects NIR
-                    is_water_approx = (opt_b_resized > opt_r_resized) & (opt_g_resized > opt_r_resized) & ((opt_r_resized + opt_g_resized + opt_b_resized) < 360)
-                    is_veg_approx = (opt_g_resized > opt_r_resized * 1.05) & (opt_g_resized > opt_b_resized)
-                    opt_nir_resized = np.where(
-                        is_water_approx,
-                        np.clip(opt_b_resized * 0.15, 0, 40),
-                        np.where(
-                            is_veg_approx,
-                            np.clip(opt_g_resized * 1.4 + 40.0, 60, 255),
-                            np.clip(opt_r_resized * 0.9 + opt_g_resized * 0.2, 30, 255)
-                        )
-                    ).astype(np.float32)
-                else:
-                    opt_nir_resized = cv2.resize(opt_nir, (512, 512)).astype(np.float32)
-                
-                # Scale optical bands to [0.0, 1.0]
-                if np.max(opt_r_resized) > 1.0:
-                    r_norm = np.clip(opt_r_resized / 255.0, 0.0, 1.0)
-                    g_norm = np.clip(opt_g_resized / 255.0, 0.0, 1.0)
-                    b_norm = np.clip(opt_b_resized / 255.0, 0.0, 1.0)
-                    nir_norm = np.clip(opt_nir_resized / 255.0, 0.0, 1.0)
-                else:
-                    r_norm = np.clip(opt_r_resized, 0.0, 1.0)
-                    g_norm = np.clip(opt_g_resized, 0.0, 1.0)
-                    b_norm = np.clip(opt_b_resized, 0.0, 1.0)
-                    nir_norm = np.clip(opt_nir_resized, 0.0, 1.0)
-                
-                # Optical 4-channel tensor: [Red, Green, Blue, NIR] (matches training dataset optical[[3,2,1,7]])
                 opt_4ch = np.stack([r_norm, g_norm, b_norm, nir_norm], axis=0)
                 opt_tensor = torch.tensor(opt_4ch, dtype=torch.float32).unsqueeze(0)
-                
-                # Dynamic cloud cover mitigation
-                cloud_fraction = cloud_cover_pct / 100.0
-                opt_tensor = opt_tensor * (1.0 - cloud_fraction * 0.5)
 
-                # 2. SAR channels: [VV, VH] in dB
-                sar_vv_resized = cv2.resize(sar_vv, (512, 512)).astype(np.float32)
-                sar_vh_resized = cv2.resize(sar_vh, (512, 512)).astype(np.float32)
-                
-                # If SAR is already in dB (negative range, e.g. -35 to 0), use directly
-                if np.min(sar_vv_resized) < -2.0:
-                    vv_db = np.clip(sar_vv_resized, -40.0, 5.0)
-                    vh_db = np.clip(sar_vh_resized, -45.0, 0.0)
-                elif np.max(sar_vv_resized) > 1.0:
-                    # 0-255 linear mapping to dB
-                    vv_db = (sar_vv_resized / 255.0) * 30.0 - 30.0
-                    vh_db = (sar_vh_resized / 255.0) * 35.0 - 35.0
-                else:
-                    # 0-1 linear mapping to dB
-                    vv_db = sar_vv_resized * 30.0 - 30.0
-                    vh_db = sar_vh_resized * 35.0 - 35.0
+                if cloud_cover_pct > 0:
+                    cloud_fraction = cloud_cover_pct / 100.0
+                    opt_tensor = opt_tensor * (1.0 - cloud_fraction * 0.4)
 
                 sar_2ch = np.stack([vv_db, vh_db], axis=0)
                 sar_tensor = torch.tensor(sar_2ch, dtype=torch.float32).unsqueeze(0)
@@ -387,53 +463,23 @@ class SegFormerMiTB2Fusion(nn.Module):
                     prob_tensor = self.forward(sar_tensor, opt_tensor)
                     probability_map = prob_tensor.squeeze().cpu().numpy()
 
-                probability_map = cv2.resize(probability_map, (512, 512), interpolation=cv2.INTER_LINEAR)
-
-                # Physical spectral & radar calibration (NDWI + NIR absorption + SAR specular scatter)
-                ndwi = (g_norm - nir_norm) / (g_norm + nir_norm + 1e-6)
-                is_spectral_water = (ndwi > 0.0) & (nir_norm < 0.35)
-                is_sar_water = (sar_vv_resized < -18.0)
-
-                # Combine neural activations with physical indices for sharp water detection
-                water_weight = np.where(is_spectral_water & is_sar_water, 0.88, np.where(is_spectral_water | is_sar_water, 0.65, 0.0)).astype(np.float32)
-                fused_prob = np.maximum(probability_map, water_weight)
-
-                return fused_prob
+                probability_map = resize_2d(probability_map, (512, 512))
+                print(f"[SegFormer] Output: min={probability_map.min():.4f}, mean={probability_map.mean():.4f}, max={probability_map.max():.4f}")
+                return probability_map.astype(np.float32)
 
             except Exception as e:
-                print(f"[SegFormer PyTorch] Inference failed: {e}. Falling back to simulation.")
+                print(f"[SegFormer PyTorch] Inference error: {e}. Falling back to spectral NDWI.")
 
-        # --- SIMULATION FALLBACK (only if PyTorch model is unavailable) ---
-        if lat is None or lon is None:
-            return np.zeros((512, 512), dtype=np.float32)
+        # 6. Pure spectral fallback (no PyTorch)
+        ndwi = (g_norm - nir_norm) / (g_norm + nir_norm + 1e-6)
+        is_spectral_water = (ndwi > 0.1) & (nir_norm < 0.08)
+        is_sar_water = (vv_db < -18.0)
 
-        lat_seed = lat
-        lon_seed = lon
-        x = np.linspace(-2.0, 2.0, 512)
-        y = np.linspace(-2.0, 2.0, 512)
-        X, Y = np.meshgrid(x, y)
-        
-        rainfall_5day = 0.0
-        try:
-            import requests
-            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat_seed}&longitude={lon_seed}&daily=precipitation_sum&past_days=5&forecast_days=1&timezone=auto"
-            res = requests.get(url, timeout=2.5)
-            if res.status_code == 200:
-                precip_list = res.json().get("daily", {}).get("precipitation_sum", [])
-                rainfall_5day = sum(p for p in precip_list if p is not None)
-        except Exception:
-            pass
+        spectral_prob = np.where(
+            is_spectral_water & is_sar_water, 0.92,
+            np.where(is_spectral_water, 0.75,
+            np.where(is_sar_water, 0.55, 0.05))
+        ).astype(np.float32)
 
-        # Dynamic multi-factor flood risk calculation for any location globally
-        coord_seed = int(abs(lat_seed * 100 + lon_seed * 100)) % 100
-        rain_factor = min(1.0, max(0.2, rainfall_5day / 60.0))
-        terrain_risk = 0.5 + (coord_seed % 45) / 100.0
-        flood_risk_multiplier = max(0.45, min(0.95, rain_factor * 0.4 + terrain_risk * 0.6))
-
-        # Synthesize river channel and inundation spread
-        river_freq = 0.2 + (coord_seed % 3) * 0.1
-        river = np.exp(-((X - 0.2 * np.sin(Y * 2.0))**2) / river_freq) * flood_risk_multiplier
-        flood_pockets = np.exp(-((X - 0.3)**2 + (Y - 0.2)**2) / 0.5) * 0.85 * flood_risk_multiplier
-        fused = np.clip(river + flood_pockets, 0.0, 1.0)
-        return fused.astype(np.float32)
+        return spectral_prob
 

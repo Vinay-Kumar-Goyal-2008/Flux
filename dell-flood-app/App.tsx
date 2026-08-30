@@ -7,9 +7,14 @@ import { MapView } from './src/components/MapView';
 import { ReportForm } from './src/components/ReportForm';
 import { AgentPanel } from './src/components/AgentPanel';
 import { SettingsPanel } from './src/components/SettingsPanel';
+import { ChatbotPanel } from './src/components/ChatbotPanel';
+import { TriagePanel } from './src/components/TriagePanel';
+import { ReportViewerModal } from './src/components/ReportViewerModal';
 import { apiService, DEFAULT_API_URL, DetectionResult, CrowdReport, ShelterInfo } from './src/services/api';
 
-type TabType = 'map' | 'report' | 'raise' | 'agent' | 'settings';
+type TabType = 'map' | 'report' | 'raise' | 'agent' | 'triage' | 'settings';
+
+
 type UserRole = 'none' | 'citizen' | 'official';
 type ScreenMode = 'login' | 'signup';
 
@@ -34,6 +39,9 @@ export default function App() {
   const seenComplaintIdsRef = useRef<Set<number>>(new Set());
   const isInitialDashboardFetchRef = useRef<boolean>(true);
   
+  // Report Viewer Modal State
+  const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  
   // Auth Form State
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -49,6 +57,7 @@ export default function App() {
   const [lastResult, setLastResult] = useState<DetectionResult | null>(null);
   const [activeLat, setActiveLat] = useState<number>(20.5937);
   const [activeLon, setActiveLon] = useState<number>(78.9629);
+
   
   // Dashboard complaints & stats states
   const [complaints, setComplaints] = useState<CrowdReport[]>([]);
@@ -154,7 +163,7 @@ export default function App() {
     if (role !== 'none') {
       fetchDashboardData(true);
     }
-  }, [role, activeTab]);
+  }, [role]);
 
   async function registerForPushNotificationsAsync() {
     if (Platform.OS === 'web') return '';
@@ -252,7 +261,14 @@ export default function App() {
         });
       }
       
-      setComplaints(currentList);
+      // Update complaints state only if items actually differ to prevent unnecessary UI re-rendering
+      setComplaints(prev => {
+        if (prev.length === currentList.length && prev.every((p, i) => p.id === currentList[i]?.id && p.status === currentList[i]?.status)) {
+          return prev;
+        }
+        return currentList;
+      });
+
       if (data.stats) {
         setStats(data.stats);
       }
@@ -678,40 +694,21 @@ export default function App() {
   }
 
   const renderChatbot = () => (
-    <View style={styles.chatbotContainer}>
-      <View style={styles.chatbotHeader}>
-        <MessageSquare size={18} color="#2563eb" />
-        <Text style={styles.chatbotTitle}>Flood Rescuer AI RAG Chatbot</Text>
-      </View>
-      {chatHistory.length > 0 && (
-        <View style={styles.chatHistoryScroll}>
-          {chatHistory.map((item, idx) => (
-            <View key={`chat-${idx}`} style={styles.chatBubbleGroup}>
-              <View style={styles.userBubble}>
-                <Text style={styles.userBubbleText}>{item.q}</Text>
-              </View>
-              <View style={styles.botBubble}>
-                <Text style={styles.botBubbleText}>{item.a}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-      <View style={styles.chatInputRow}>
-        <TextInput
-          style={styles.chatInput}
-          placeholder="Ask about safety measures (e.g. 'what should I do?')..."
-          placeholderTextColor="#94a3b8"
-          value={chatQuery}
-          onChangeText={setChatQuery}
-          onSubmitEditing={handleChatQuery}
-        />
-        <TouchableOpacity style={styles.chatSendBtn} onPress={handleChatQuery} disabled={chatLoading}>
-          {chatLoading ? <ActivityIndicator size="small" color="#ffffff" /> : <Text style={styles.chatSendText}>Ask</Text>}
-        </TouchableOpacity>
-      </View>
+    <View style={{ height: 520, marginBottom: 16, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#ffffff' }}>
+      <ChatbotPanel 
+        lastResult={lastResult} 
+        activeLocationName={lastResult ? `${activeLat.toFixed(2)}°N, ${activeLon.toFixed(2)}°E Scan Zone` : undefined}
+        onNavigateToCoords={(clat, clon) => {
+          setActiveLat(clat);
+          setActiveLon(clon);
+          setActiveTab('map');
+        }}
+        onOpenReportModal={() => setShowReportModal(true)}
+      />
     </View>
   );
+
+
 
   return (
     <SafeAreaView style={styles.safeContainer}>
@@ -913,98 +910,9 @@ export default function App() {
               {renderRegionalImpactReport()}
 
               {renderChatbot()}
-              
-              <TouchableOpacity 
-                style={styles.testAlertBtn} 
-                onPress={() => triggerNotification("Emergency Test Notification", "This is an automated Text-To-Speech alert check.", "emergency")}
-              >
-                <Bell size={14} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.testAlertText}>Trigger Live Test Warning Notification</Text>
-              </TouchableOpacity>
 
-              {/* Assam State Flood Report Card (White Theme) */}
-              <View style={styles.panelCard}>
-                <View style={styles.cardHeader}>
-                  <FileText size={18} color="#2563eb" style={{ marginRight: 6 }} />
-                  <Text style={styles.cardTitle}>Assam Flood Severity Report</Text>
-                </View>
-                <Text style={styles.helperText}>
-                  Preview current regional critical priorities or export as a multi-page PDF document for offline rescue coordination:
-                </Text>
 
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                  <TouchableOpacity 
-                    style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 8 }} 
-                    onPress={handlePreviewAssamReport}
-                    disabled={loadingAssamPreview}
-                  >
-                    {loadingAssamPreview ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <>
-                        <Eye size={14} color="#ffffff" style={{ marginRight: 6 }} />
-                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 12 }}>
-                          {showAssamPreview ? "Hide Preview" : "Preview Report"}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 8 }} 
-                    onPress={() => {
-                      const reportUrl = `${DEFAULT_API_URL}/reports/assam-top10`;
-                      Linking.openURL(reportUrl)
-                        .catch(err => Alert.alert('Error', 'Unable to open download URL.'));
-                    }}
-                  >
-                    <Compass size={14} color="#ffffff" style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 12 }}>Download PDF</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {showAssamPreview && assamHotspots.length > 0 && (
-                  <View style={{ marginTop: 12, backgroundColor: '#f8fafc', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#0f172a', marginBottom: 6 }}>
-                      State Mitigation Priority (Sorted by Severity):
-                    </Text>
-                    {assamHotspots.map((hs, idx) => (
-                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: idx === assamHotspots.length - 1 ? 0 : 0.5, borderBottomColor: '#cbd5e1' }}>
-                        <Text style={{ fontSize: 11, color: '#334155', fontWeight: '600' }}>
-                          {idx + 1}. {hs.name}
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                          <View style={{ backgroundColor: hs.severity === 'CRITICAL' ? '#fef2f2' : hs.severity === 'HIGH' ? '#fffbeb' : '#f0fdf4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontWeight: 'bold', color: hs.severity === 'CRITICAL' ? '#dc2626' : hs.severity === 'HIGH' ? '#b45309' : '#15803d' }}>
-                              {hs.severity}
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 10, color: '#64748b', minWidth: 60, textAlign: 'right' }}>
-                            {hs.area}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* Recipient Email configuration card */}
-              <View style={styles.panelCard}>
-                <View style={styles.cardHeader}>
-                  <Mail size={18} color="#2563eb" />
-                  <Text style={styles.cardTitle}>Demo Recipient Email Configuration</Text>
-                </View>
-                <Text style={styles.helperText}>Enter the email address where the LLM generated situation bulletins should be sent:</Text>
-                <TextInput
-                  style={styles.emailConfigInput}
-                  value={recipientEmail}
-                  onChangeText={setRecipientEmail}
-                  placeholder="e.g. disaster-center@bihar.gov.in"
-                  placeholderTextColor="#94a3b8"
-                  autoCapitalize="none"
-                />
-              </View>
 
               <View style={styles.statsCardRow}>
                 <View style={styles.statBox}>
@@ -1190,7 +1098,7 @@ export default function App() {
           )
         )}
 
-        {activeTab === 'agent' && role === 'official' && (
+        {activeTab === 'agent' && (
           <AgentPanel 
             lastResult={lastResult} 
             activeLat={activeLat} 
@@ -1198,10 +1106,42 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'triage' && (
+          <TriagePanel />
+        )}
+
         {activeTab === 'settings' && (
           <SettingsPanel />
         )}
       </View>
+
+      {/* Report Viewer & PDF Download Modal */}
+      <ReportViewerModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        location={lastResult ? `${activeLat.toFixed(2)}°N, ${activeLon.toFixed(2)}°E Scan Zone` : 'Regional Area'}
+        lat={activeLat}
+        lon={activeLon}
+        area={lastResult?.area_sq_km || 12.5}
+        classification={lastResult?.classification || 'Inundation'}
+        severity={lastResult?.severity || 'HIGH'}
+        pop={lastResult?.impact?.population || 12500}
+        bld={lastResult?.impact?.buildings || 1850}
+        fac={lastResult?.impact?.facilities || 4}
+        conf={lastResult?.confidence_score || 94.2}
+        pdfDownloadUrl={apiService.getPdfReportDownloadUrl({
+          location: lastResult ? `${activeLat.toFixed(2)}°N, ${activeLon.toFixed(2)}°E Scan Zone` : 'Regional Area',
+          lat: activeLat,
+          lon: activeLon,
+          area: lastResult?.area_sq_km || 12.5,
+          classification: lastResult?.classification || 'Inundation',
+          severity: lastResult?.severity || 'HIGH',
+          pop: lastResult?.impact?.population || 12500,
+          bld: lastResult?.impact?.buildings || 1850,
+          fac: lastResult?.impact?.facilities || 4,
+          conf: lastResult?.confidence_score || 94.2
+        })}
+      />
 
       {/* Navigation Tab Bar */}
       <View style={styles.tabBar}>
@@ -1223,6 +1163,14 @@ export default function App() {
           </Text>
         </TouchableOpacity>
 
+        <TouchableOpacity 
+          style={[styles.tabItem, activeTab === 'agent' && styles.tabActive]}
+          onPress={() => setActiveTab('agent')}
+        >
+          <Cpu size={20} color={activeTab === 'agent' ? '#2563eb' : '#64748b'} />
+          <Text style={[styles.tabLabel, activeTab === 'agent' && styles.tabLabelActive]}>AI Agent</Text>
+        </TouchableOpacity>
+
         {role === 'citizen' && (
           <TouchableOpacity 
             style={[styles.tabItem, activeTab === 'raise' && styles.tabActive]}
@@ -1230,16 +1178,6 @@ export default function App() {
           >
             <PlusCircle size={20} color={activeTab === 'raise' ? '#ef4444' : '#64748b'} />
             <Text style={[styles.tabLabel, activeTab === 'raise' && styles.tabLabelActive]}>Raise Issue</Text>
-          </TouchableOpacity>
-        )}
-
-        {role === 'official' && (
-          <TouchableOpacity 
-            style={[styles.tabItem, activeTab === 'agent' && styles.tabActive]}
-            onPress={() => setActiveTab('agent')}
-          >
-            <Cpu size={20} color={activeTab === 'agent' ? '#10b981' : '#64748b'} />
-            <Text style={[styles.tabLabel, activeTab === 'agent' && styles.tabLabelActive]}>AI Agent</Text>
           </TouchableOpacity>
         )}
 
@@ -1251,9 +1189,14 @@ export default function App() {
           <Text style={[styles.tabLabel, activeTab === 'settings' && styles.tabLabelActive]}>Settings</Text>
         </TouchableOpacity>
       </View>
+
+
+
     </SafeAreaView>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   authErrorBox: {

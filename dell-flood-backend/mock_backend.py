@@ -61,12 +61,35 @@ def get_satellite_preview(lat: float, lon: float):
 
 @app.post("/api/run-detection")
 def run_detection(lat: float, lon: float, cloud_cover: float = 10.0):
-    seed = abs(lat + lon)
-    random.seed(int(seed * 100))
-    
-    is_waterlogging = random.random() > 0.6
-    area = round(0.1 + random.random() * 4.5, 2)
-    conf = round(75.0 + random.random() * 20.0, 1)
+    rainfall_5day = 0.0
+    try:
+        import requests
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum&past_days=5&forecast_days=1&timezone=auto"
+        res = requests.get(url, timeout=2.5)
+        if res.status_code == 200:
+            precip_list = res.json().get("daily", {}).get("precipitation_sum", [])
+            rainfall_5day = sum(p for p in precip_list if p is not None)
+    except Exception:
+        pass
+
+    is_delhi_rajasthan = (24.0 <= lat <= 29.0 and 70.0 <= lon <= 77.5)
+    is_assam = (24.0 <= lat <= 28.5 and 89.5 <= lon <= 96.5)
+    is_bihar = (24.5 <= lat <= 27.5 and 83.5 <= lon <= 88.5)
+
+    if (is_delhi_rajasthan and rainfall_5day < 45.0) or rainfall_5day < 35.0:
+        return {
+            "confidence_score": 0.0,
+            "classification": "Normal Conditions / Dry Ground",
+            "area_sq_km": 0.0,
+            "severity": "NONE",
+            "severity_score": 0,
+            "impact": { "population": 0, "buildings": 0, "facilities": 0 },
+            "mask_geojson": { "type": "FeatureCollection", "features": [] }
+        }
+
+    rain_excess = max(0.0, rainfall_5day - 35.0)
+    area = round(min(8.5, max(0.4, (rain_excess / 40.0) * 2.5 + (0.5 if is_assam else 0.0))), 2)
+    conf = round(75.0 + min(22.0, rain_excess / 2.0), 1)
     
     pop = int(area * 1200)
     bld = int(area * 40)
@@ -74,9 +97,9 @@ def run_detection(lat: float, lon: float, cloud_cover: float = 10.0):
     
     score = min(1.0, (pop / 10000 * 0.4) + (bld / 1000 * 0.3) + (fac / 5 * 0.2) + (area / 10 * 0.1))
     
-    if score >= 0.7:
+    if score >= 0.7 or area >= 3.0:
         severity = "CRITICAL"
-    elif score >= 0.4:
+    elif score >= 0.4 or area >= 1.5:
         severity = "HIGH"
     elif score >= 0.2:
         severity = "MODERATE"
@@ -103,7 +126,7 @@ def run_detection(lat: float, lon: float, cloud_cover: float = 10.0):
     
     return {
         "confidence_score": conf,
-        "classification": "Waterlogging" if is_waterlogging else "Flood",
+        "classification": "Flood Inundation" if area >= 0.35 else "Waterlogging",
         "area_sq_km": area,
         "severity": severity,
         "severity_score": int(score * 100),
