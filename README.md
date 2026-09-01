@@ -1,21 +1,12 @@
 <div align="center">
 
-# 🌊 AEGIS: AI-Powered Multimodal Satellite Flood Detection & Autonomous Disaster Response System
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![React Native](https://img.shields.io/badge/React_Native-Expo_SDK_51%2B-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Autonomous_Agents-FF6F00.svg?style=for-the-badge&logo=langchain&logoColor=white)](https://www.langchain.com/)
-[![Mapbox](https://img.shields.io/badge/Mapbox-Geospatial_GL-000000.svg?style=for-the-badge&logo=mapbox&logoColor=white)](https://www.mapbox.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+# FLUX: AI-Powered Multimodal Satellite Flood Detection & Autonomous Disaster Response System
 
 <p align="center">
-  <b>An end-to-end mission-critical disaster management platform fusing dual-modal satellite remote sensing (Sentinel-1 SAR + Sentinel-2 Optical), Deep Transformer Segmentation (Dual MIT-B2 SegFormer), Autonomous Multi-Agent Reasoning (LangGraph + RAG), and Offline-First Mobile Evacuation Routing.</b>
+  <b>Flux is an autonomous conversational agent that bridges large language models with real time physical world infrastructure data. Powered by OpenAI GPT-4o and the MirEye Earth API, Flux handles open ended conversational tasks while dynamically routing location sensitive queries to verified spatial, hydrological and environmental hazard tools across the United States.
+  
+Emergency managers, field responders and residents often lack instant verified physical world context during extreme weather events, forcing them to manually consult disjointed federal GIS portals. By fusing dual encoder satellite Earth observation (SAR + Optical) with Mireye's sub meter physical intelligence layer, continuous Topographic Wetness Index hydrology, and an in flight human in the loop decision engine, Flux identifies imminent flash flood zones, dynamically routes evacuees away from submersed corridors, and empowers incident commanders in real time. Flux bridges conversational AI with real time geospatial ground telemetry i.e. users ask questions about any US city, county or landmark in plain English and Flux automatically resolves place names into coordinates, queries MirEye's sub meter Earth observation API and delivers actionable safety insights backed by authoritative federal citations (USGS, FEMA, NOAA).</b>
 </p>
-
-[Key Features](#-key-features) • [Deep Learning Architecture](#-deep-learning-architecture--pipeline) • [System Architecture](#-system-architecture) • [Project Structure](#-project-structure) • [Getting Started](#-getting-started) • [API Reference](#-api-endpoints) • [License](#-license)
 
 </div>
 
@@ -23,353 +14,203 @@
 
 ## 📌 Executive Overview
 
-Floods represent one of the most destructive and rapidly evolving climate disasters worldwide. Traditional disaster response suffers from:
-1. **Cloud cover obscuring optical satellite imagery** during torrential downpours.
-2. **High false-alarm rates in single-sensor Synthetic Aperture Radar (SAR)** due to specular reflections from smooth urban surfaces and radar shadow.
-3. **Severe latency in ground-truth cross-validation and emergency notification dispatch**.
-4. **Network infrastructure blackouts** leaving affected citizens stranded without evacuation guidance.
+During major flood disasters, emergency response operations suffer from two fatal blind spots:
 
-**AEGIS** resolves these critical bottlenecks by combining **multimodal Earth Observation (EO)** with **state-of-the-art Deep Vision Transformers**, **autonomous incident response agents**, and **offline-first tactical mobile routing**.
+1. The "Flat Map" Blind Spot: Standard satellite segmentation only tells you where surface water was when the satellite passed overhead. It cannot tell you ground elevation, soil saturation, building heights, population counts or which dry roads will submerge in the next 6 hours.
+2. The "Naive Routing" Blind Spot: Evacuation navigation systems route evacuees based on shortest straight line distance, leading civilians directly into low elevation terrain depressions and flooded road basins.
+
+Flux bridges this gap by injecting physical telemetry from the Mireye API (USGS 3DEP DEM elevation, slope, FEMA 100/500 yr floodplains, USGS NHD hydrography, and Overture building footprints) into every routing, triage, and dispatch decision.
 
 ---
 
 ## 🧠 Deep Learning Architecture & Pipeline
 
-AEGIS implements a custom **Dual-Encoder Multimodal SegFormer architecture** specifically optimized for high-precision flood boundary delineation in challenging weather and all-terrain scenarios.
+Flux implements a custom **Dual-Encoder Multimodal SegFormer architecture** specifically optimized for high-precision flood boundary delineation in challenging weather and all-terrain scenarios.
 
 ![AEGIS Deep Learning Architecture & Pipeline](assets/architecture_pipeline.png)
 
-### 🔬 End-to-End Pipeline Breakdown
+### System Architecture
 
 ```
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │  1. Input: Bounding Box & Target Timestamp                                      │
- └──────────────────────────────┬───────────────────────────────────────────────────┘
-                                │
-        ┌───────────────────────┴───────────────────────┐
-        ▼                                               ▼
- ┌──────────────────────────────┐                ┌──────────────────────────────┐
- │ 2. Sentinel-2 (RGB Optical)  │                │ 3. Sentinel-1 (VV + VH SAR)  │
- └──────────────┬───────────────┘                └──────────────┬───────────────┘
-                │                                               │
-                └───────────────────────┬───────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 3. ECC Sub-pixel Image Registration & Alignment (Corrects Sensor Parallax)      │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 4. Radiometric Calibration & Normalization (Optical: /10000 | SAR: Mean-Std)     │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 5. Dual-Stream Feature Extraction (Hierarchical MIT-B2 Vision Transformer)       │
- │    • Optical Encoder: F1(64ch)  -> F2(128ch) -> F3(320ch) -> F4(512ch)           │
- │    • SAR Encoder:     F1(64ch)  -> F2(128ch) -> F3(320ch) -> F4(512ch)           │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 6. Hybrid Feature Fusion                                                         │
- │    • Stage 1 & 2: Gated Spatial Fusion (Preserves fine boundaries & roads)       │
- │    • Stage 3 & 4: Cross-Attention Fusion (Contextual semantic reasoning)         │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 7. Improved Feature Pyramid Network (FPN) Decoder                                │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 8. Boundary Refinement Block (High-frequency edge preservation & sharpening)    │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 9. Pixel-Level Segmentation Head (Bilinear Upsampling to 512×512 GeoTIFF)        │
- └──────────────────────────────────────┬───────────────────────────────────────────┘
-                                        ▼
- ┌──────────────────────────────────────────────────────────────────────────────────┐
- │ 10. Calibrated Flood Probability Map (0.0 to 1.0 confidence mask)                │
- └──────────────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **Dual Earth Observation Ingestion:** Queries Sentinel Hub APIs concurrently to fetch co-registered Sentinel-1 SAR (interferometric Wide Swath, dual-pol VV & VH) and Sentinel-2 MSI Multi-Spectral Optical imagery.
-2. **Enhanced Correlation Coefficient (ECC) Alignment:** Corrects sub-pixel geospatial drift and rotational parallax between orbital satellite tracks.
-3. **Hierarchical Dual MIT-B2 Encoders:** Separate spatial transformers process optical and radar modalities independently, preventing radar speckle noise from degrading optical spectral features.
-4. **Gated & Cross-Attention Multimodal Fusion:** Early stages utilize gated spatial convolutions to capture shallow water edges; deeper stages employ cross-attention mechanisms to correlate optical water indices (NDWI) with radar dielectric constants.
-5. **Boundary Refinement & Segmentation Head:** A multi-scale FPN with a residual boundary block suppresses false positives on urban tarmac and airport runways, producing a calibrated float32 probability tensor.
-
----
-
-## ⚡ Key Features
-
-### 🛰️ 1. Geospatial & Satellite Intelligence
-* **All-Weather Penetration:** Pierces 100% dense monsoon cloud covers using C-band Synthetic Aperture Radar (SAR).
-* **Automated Sentinel Hub Pipeline:** On-demand fetching, cloud-masking, and bounding box tiling for any region of interest across India and globally.
-* **Vectorized GeoJSON Contours:** Raw model output is automatically vectorized into interactive GIS choropleth polygons and multi-tier hazard zones.
-
-### 🤖 2. Autonomous Disaster Response Agent (LangGraph + RAG)
-* **Autonomous Reasoning Loop:** A scheduled state machine (`Perceive` ➡️ `Plan` ➡️ `Act` ➡️ `Reflect`) monitors live sensor streams every 6 hours.
-* **RAG Retrieval Engine:** Integrates ChromaDB vector store loaded with National Disaster Management Authority (NDMA) Standard Operating Procedures (SOPs), relief manual protocols, and river basin safety guidelines.
-* **Multi-LLM Strategy:** Intelligent fallback routing across Google Gemini Pro/Flash and Groq Llama-3-70B for high-throughput situational report generation and command briefs.
-
-### 🚨 3. Multi-Channel Emergency Alert Dispatch
-* **Twilio Automated Voice (IVR):** Automatically places synthesized emergency telephone calls to registered citizens and district magistrates in confirmed flood polygons.
-* **SMS Broadcast Gateway:** High-priority SMS dispatches detailing localized evacuation centers and shelter coordinates.
-* **Automated SMTP Executive Briefs:** Comprehensive PDF situation reports generated on the fly and dispatched to relief coordinators.
-* **Local Mobile Text-to-Speech (TTS):** Spoken auditory evacuation warnings in the mobile app when entering active hazard zones.
-
-### 📱 4. Offline-First Mobile Tactical Client
-* **React Native / Expo Cross-Platform:** High-performance mobile UI built with TypeScript and Mapbox GL vector mapping.
-* **Offline Dijkstra Evacuation Routing:** Computes the safest path to designated relief camps using local topology even when cellular towers and data services go offline.
-* **Crowdsourced Hazard Verification:** Citizen-reported flood incidents and geotagged SOS requests are prioritized and cross-validated against satellite inference masks.
-* **Dual Operational Modes:** Tailored user experience with dedicated **Citizen Safety Dashboard** and **Official Incident Command Console**.
-
----
-
-## 🏗️ System Architecture
+ [Satellite SAR + Optical] ──► [NDWI Filter] ──► [Clean GeoJSON Inundation Mask]
+                                                        │
+                                                        ▼
+                                            [Mireye Physical API]
+                                    (DEM Elev, Slope, Floodplains, POIs)
+                                                        │
+                         ┌──────────────────────────────┴──────────────────────────────┐
+                         ▼                                                             ▼
+         [Predictive TWI Hydrology Layer]                            [DBSCAN Population Clustering]
+              Flash-Flood Pooling Basins                                      │
+                         │                                                             ▼
+                         └──────────────────────────────┬──────────────────────────────┘
+                                                        ▼
+                                    [Elevation-Weighted Road Graph]
+                                      (NetworkX / Dijkstra Routing)
+                                                        │
+                                                        ▼
+                                       [Multi Criteria Triage Engine]
+                                   Priority = Pop × (1 + Exp) / Elev_Safety
+                                                        │
+                                                        ▼
+                                   [In Flight Feedback Interceptor]
+                                (LangGraph: SHELTER_FULL / ROAD_CLOSED)
+                                                        │
+                         ┌──────────────────────────────┴──────────────────────────────┐
+                         ▼                                                             ▼
+         [Incident Commander Dashboard & SITREP]                      [Geo Targeted Citizen SMS]
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        MOBILE CLIENT (React Native / Expo)             │
-│  ┌──────────────────────┐ ┌──────────────────────┐ ┌────────────────┐  │
-│  │ Citizen SOS & Report │ │ Mapbox GL Overlays   │ │ Offline Engine │  │
-│  │ (GPS Geotagging)     │ │ (Risk Choropleths)   │ │ (Dijkstra Path)│  │
-│  └──────────────────────┘ └──────────────────────┘ └────────────────┘  │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTPS / REST API
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      BACKEND SERVER (Python / FastAPI)                 │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ REST API Routers: Auth | Monitoring | Complaints | Telephony     │  │
-│  └──────┬───────────────────────┬────────────────────────────┬──────┘  │
-│         │                       │                            │         │
-│         ▼                       ▼                            ▼         │
-│  ┌───────────────┐     ┌──────────────────┐        ┌────────────────┐  │
-│  │ PyTorch ML    │     │ LangGraph Agent  │        │ GIS Processing │  │
-│  │ (Dual MIT-B2  │     │ & ChromaDB RAG   │        │ (PySheds,      │  │
-│  │ SegFormer)    │     │ (NDMA SOP Query) │        │ Rasterio, GDAL)│  │
-│  └───────────────┘     └──────────────────┘        └────────────────┘  │
-│         │                       │                            │         │
-└─────────┼───────────────────────┼────────────────────────────┼─────────┘
-          │                       │                            │
-          ▼                       ▼                            ▼
-┌──────────────────┐     ┌──────────────────┐        ┌────────────────┐
-│  Sentinel Hub    │     │ Telephony APIs   │        │ Local Storage  │
-│  (Sentinel-1/2)  │     │ (Twilio & SMTP)  │        │ (SQLite / DB)  │
-└──────────────────┘     └──────────────────┘        └────────────────┘
-```
+ **Core Innovation: What Flux Solves**
 
----
+<img width="331" height="302" alt="image" src="https://github.com/user-attachments/assets/675f372e-c163-436f-878d-a582e7b2e31a" />   
+
+
+## Empirical Validation: Does Mireye Context Matter?
+
+To prove that the Mireye coordinate round-trip performs critical life-safety work rather than visual decoration, Flux runs an empirical benchmark comparing a **Naive Straight-Line Strategy** against the **Mireye Context-Aware Strategy** across 33 real disaster clusters.
+
+[SUMMARY RESULTS] 
+  - Total Evaluated Clusters    : 33
+  - Diverged Recommendations    : 2 clusters (6.1%)
+  - Avg Extra Distance Accepted : +1.15 km (Safety Detour)
+  - Sensitivity Projection      : 9.1% (Widened TWI Variance)
+
+Context aware routing altered the primary shelter recommendation in 6.1% of disaster clusters, accepting an average of +1.15 km of travel to steer evacuees away from high risk, flood compromised access corridors.
+
 
 ## 📂 Project Structure
 
 ```
-Dell_Project/
-├── .env.example                     # Root environment variable template
-├── .gitignore                       # Global gitignore (protects secrets & large binaries)
-├── assets/
-│   └── architecture_pipeline.png    # High-resolution architectural diagram
-├── dell-flood-app/                  # React Native / Expo Frontend Application
-│   ├── App.tsx                      # Main gateway, routing, citizen/official dashboards
-│   ├── app.json                     # Native permissions & Expo configuration
-│   ├── package.json                 # Mobile dependencies
-│   ├── tsconfig.json                # TypeScript configuration
-│   └── src/
-│       ├── components/
-│       │   ├── MapView.tsx          # Mapbox GL choropleths, overlays & routing
-│       │   ├── ReportForm.tsx       # Crowdsourced incident report interface
-│       │   ├── AgentPanel.tsx       # Autonomous LangGraph live activity logs
-│       │   └── SettingsPanel.tsx    # Live/Mock toggles & server IP configuration
-│       ├── services/
-│       │   └── api.ts               # Backend API integration & offline cache
-│       └── utils/
-│           └── routing.ts           # Offline Dijkstra graph routing algorithm
+Mireye/
+├── api/                                    # Mireye Live API Client & Data Models
+│   ├── client.py                           # Batch queries, retries, exponential backoff
+│   └── models.py                           # Pydantic schemas (FloodPolygon, LatLng, PhysicalContext)
 │
-└── dell-flood-backend/              # FastAPI Machine Learning Server
-    ├── main.py                      # FastAPI application entrypoint
-    ├── requirements.txt             # Python backend dependencies
-    ├── .env.example                 # Backend environment variable template
-    ├── mock_backend.py              # Simulated test backend for demo/offline runs
-    ├── test_backend.py              # Automated test suite
-    ├── corpus/                      # Disaster SOPs, NDMA guidelines & manuals
-    └── app/
-        ├── api/
-        │   └── endpoints.py         # Endpoints for Auth, GIS, Alerts & Incidents
-        ├── ml/
-        │   ├── inference.py         # Dual MIT-B2 PyTorch SegFormer inference engine
-        │   └── postprocess.py       # Flood contour generation & NDWI calibration
-        ├── agent/
-        │   ├── flood_agent.py       # LangGraph autonomous cron loop & state graph
-        │   └── tools.py             # Agent tools (Satellite fetcher, IVR, RAG query)
-        └── RAG/
-            ├── vector_store.py      # ChromaDB document embedding & indexing
-            └── generator.py         # Google Gemini & Groq multi-LLM router
+├── pipeline/                               # Hydrology & Inundation Pipelines
+│   ├── predictive_twi.py                   # TWI computation (D8 flow accumulation & slope)
+│   ├── flood_prone.py                      # Multi-factor Flood Susceptibility Index (FSI)
+│   ├── batch_predictive_hazard.py          # Multi-county live batch execution runner
+│   ├── physical_data_hazard_engine.py      # Ground-truth processor for physical_data.json
+│   └── flood_data.py                       # Polygon loader & GeoJSON utilities
+│
+├── decision_engine/                        # Autonomous Triage & Interceptor
+│   ├── triage.py                           # Priority ranking & shelter capacity allocation
+│   ├── interceptor.py                      # LangGraph in-flight feedback & course correction
+│   └── mireye_value_experiment.py          # Day 11 empirical validation experiment
+│
+├── shelters/                               # Safe Shelter Discovery
+│   └── finder.py                           # Multi-source shelter finder & elevation ranker
+│
+├── routing/                                # Road Graph & Route Engine
+│   ├── elevation_router.py                 # Elevation-penalized Dijkstra routing
+│   └── network_builder.py                  # NetworkX road network graph constructor
+│
+├── visualization/                          # Tactical Disaster Maps
+│   └── map_plotter.py                      # 100% watermark-free Folium map visualizer with HUD
+│
+├── chatbot/                                # Conversational Spatial Agent
+│   └── agent.py                            # GPT-4o agent with MirEye physical tools & geocoding
+│
+├── data/                                   # Input Flood Polygons
+│   └── model_flood_polygons.json           # 24 benchmark flooded county coordinates
+│
+├── output/                                 # Generated Datasets and Maps
+│   ├── all_counties_predictive_hazard.json # Consolidated 24 county predictive hazard report
+│   ├── physical_data_predictive_hazard.json# 11 region ground truth analysis
+│   ├── mireye_value_comparison.json        # Empirical validation dataset
+│   ├── day11_empirical_validation_report.md# Validation markdown report
+│   ├── twi_risk_surface.json               # Cluster TWI surface matrices
+│   ├── evacuation_plans.json               # Cluster evacuation routes & shelters
+│   └── *.html                              # Interactive Folium tactical disaster maps
+│
+├── main.py                                 # Main Unified Command-Line Interface (CLI)
+├── run_flux_master.py                      # Master end-to-end execution script
+├── requirements.txt                        # Python dependencies
+├──  README.md                               # Project documentation
+
 ```
 
 ---
 
-## 🚀 Getting Started
+###  Installation & Quickstart
 
-### 📋 Prerequisites
+### 1. Clone & Setup Virtual Environment
+```bash
+git clone https://github.com/your-org/flux-disaster-intelligence.git
+cd flux-disaster-intelligence
 
-* **Python:** 3.10 or 3.11
-* **Node.js:** v18.0+ & npm / yarn
-* **Expo CLI:** `npm install -g expo-cli`
-* **Git:** Installed on system path
+# Create and activate Python virtual environment
+python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
+```
 
----
+ 2. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-### 🔧 1. Backend Setup (FastAPI & PyTorch)
-
-1. **Navigate to the backend directory:**
-   ```bash
-   cd dell-flood-backend
-   ```
-
-2. **Create and activate a virtual environment:**
-   ```bash
-   # On Windows
-   python -m venv venv
-   .\venv\Scripts\activate
-
-   # On Linux/macOS
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure Environment Variables:**
-   Copy `.env.example` to `.env` and provide your API keys:
-   ```bash
-   cp .env.example .env
-   ```
-   *(See [Environment Variables Reference](#-environment-variables-reference) below)*
-
-5. **Start the FastAPI server:**
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-   The backend interactive documentation will be available at: `http://localhost:8000/docs`
-
----
-
-### 📱 2. Frontend Setup (React Native / Expo)
-
-1. **Navigate to the app directory:**
-   ```bash
-   cd ../dell-flood-app
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Configure API IP:**
-   * Open the app settings panel in the app or modify `src/services/api.ts` to point to your machine's local network IP (e.g., `http://192.168.1.XX:8000`).
-
-4. **Launch the Expo development server:**
-   ```bash
-   npx expo start
-   ```
-   * Press `w` to run on Web Browser.
-   * Scan the QR code using the **Expo Go** app on Android/iOS.
-
----
-
-## 🔐 Environment Variables Reference
-
-Create a `.env` file in the project root or inside `dell-flood-backend/` based on the following template:
-
+ 3. Configure API Credentials
+Create a `.env` file in the root directory:
+```bash
+cp .env.example .env
+```
+Edit `.env` and add your API credentials:
 ```ini
-# ========================================================
-# SATELLITE & WEATHER APIs
-# ========================================================
-SENTINEL_CLIENT_ID=your_sentinel_hub_client_id
-SENTINEL_CLIENT_SECRET=your_sentinel_hub_client_secret
-OPENWEATHER_API_KEY=your_openweathermap_api_key
-CWC_API_KEY=your_cwc_river_gauge_key
+MIREYE_API_TOKEN=your_mireye_jwt_token_here
+MIREYE_BASE_URL=https://api.mireye.com/v1
+OPENAI_API_KEY=your_openai_api_key_here
+CACHE_TTL_HOURS=24
+```
 
-# ========================================================
-# TELEPHONY & EMERGENCY DISPATCH
-# ========================================================
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-
-# SMTP Automated Email Dispatch
-SMTP_SENDER_EMAIL=your_email@gmail.com
-SMTP_SENDER_PASSWORD=your_google_app_password
-
-# ========================================================
-# LLM REASONING & RAG
-# ========================================================
-GEMINI_API_KEY=your_google_gemini_api_key
-GROQ_API_KEY=your_groq_api_key
-OPENAI_API_KEY=your_openai_api_key
-
-# ========================================================
-# GEOSPATIAL & SECURITY
-# ========================================================
-MAPBOX_TOKEN=your_mapbox_public_token
-JWT_SECRET_KEY=your_secure_random_jwt_secret
-
-# ========================================================
-# STORAGE & DATABASE
-# ========================================================
-DATABASE_URL=sqlite:///./flood_database.db
-CHROMA_DB_PATH=./chroma_data
-MODEL_WEIGHTS_PATH=app/ml/weights/mit_b2_segformer.onnx
+### 4. Execute the Pipeline
+```bash
+python run_flux_master.py
 ```
 
 ---
 
-## 📡 API Endpoints
+CLI Reference
 
-| Method | Endpoint | Description |
+Flux provides a powerful, modular CLI via `main.py`:
+
+| Command | Description | Example |
 | :--- | :--- | :--- |
-| `POST` | `/api/auth/register` | Register citizen or disaster response official account |
-| `POST` | `/api/auth/login` | Authenticate and return JWT token |
-| `POST` | `/api/detect/flood` | Trigger on-demand Sentinel SAR+Optical inference for a bounding box |
-| `GET` | `/api/detect/history` | Retrieve historical flood probability masks & GeoJSON polygons |
-| `POST` | `/api/complaints/submit` | Geotagged crowdsourced flood report submission |
-| `GET` | `/api/complaints/list` | Retrieve prioritized incident reports with ML cross-validation |
-| `POST` | `/api/alerts/dispatch-ivr` | Trigger emergency automated Twilio voice telephone call |
-| `POST` | `/api/alerts/dispatch-email`| Generate and dispatch PDF situation brief via SMTP |
-| `POST` | `/api/agent/query` | RAG-assisted SOP query with LangGraph flood agent |
-| `GET` | `/api/health` | Service health status & GPU availability |
+| `python main.py run` | Ingest flood polygon & extract Mireye physical context | `python main.py run -p philadelphia_county_pa -n 10` |
+| `python main.py evacuate` | Run DBSCAN clustering & elevation-weighted road routing | `python main.py evacuate -p houston_harvey` |
+| `python main.py predict` | Compute TWI hydrology & flood susceptibility models | `python main.py predict -p charleston_county_sc -n 25` |
+| `python main.py predict -f` | Ingest & analyze comprehensive `physical_data.json` | `python main.py predict -f physical_data.json` |
+| `python main.py validate` | Run Day 11 empirical validation experiment | `python main.py validate` |
+| `python main.py chat` | Launch conversational GPT-4o agent with MirEye tools | `python main.py chat -m "Flood risk in Charleston, SC"` |
+| `python main.py usage` | Check live Mireye API credit balance & limits | `python main.py usage` |
+| `python main.py catalog` | View all supported Mireye physical attributes | `python main.py catalog` |
 
 ---
 
-## 📊 Evaluation & Performance Benchmarks
+## Tactical Disaster Map Visualizations
 
-| Metric | Single Optical (S2) | Single SAR (S1) | **AEGIS Dual-Fusion (Ours)** |
-| :--- | :---: | :---: | :---: |
-| **Mean IoU (Clear Sky)** | 82.4% | 76.1% | **89.7%** |
-| **Mean IoU (Cloud Cover > 80%)** | 14.2% *(Failed)* | 75.8% | **87.3%** |
-| **Urban False Positive Rate** | 18.7% | 24.3% | **4.1%** |
-| **End-to-End Inference Latency** | 1.8s | 1.4s | **1.9s** *(RTX 4090)* |
+Flux renders **100% watermark-free, high-contrast Folium HTML maps** built for emergency management operations. Every map includes an interactive Disaster HUD legend and multi-layer toggles:
 
----
+*  **Active Inundation Footprint:** High contrast danger polygon extracted via dual encoder SAR/Optical satellite imagery.
+*  **Critical Runoff Nodes:** Glowing magenta markers identifying concave terrain basins with high TWI scores prone to flash pooling.
+*  **Affected Neighborhood Centroids:** High contrast targets displaying population estimates and building counts from DBSCAN clustering.
+*  **Safe Emergency Shelters:** Emerald pins indicating safe facilities tagged with ground DEM elevation.
+*  **Elevation-Weighted Evacuation Paths:** Cyan polyline corridors steering clear of flood prone road segments.
 
-## 🛡️ Security & Privacy
+> Maps are automatically generated . Open any map directly in a web browser to inspect interactive popups with DEM heights, slope angles, FEMA status, and soil drainage properties.
 
-* **Zero-Leakage Guarantee:** All `.env` files, sensitive API keys, and database files are strictly ignored via Git rules and prevented from leaking upstream.
-* **Role-Based Access Control (RBAC):** Cryptographically signed JWT tokens separate Citizen capabilities from Incident Commander actions.
-* **On-Device Offline Fallback:** Critical survival tools (GPS locator & Dijkstra escape routing) execute locally without transmitting telemetry when networks are down.
+## Honest Caveats & Open Items
 
----
+In the interest of full technical integrity and transparency:
+1. **DEM Smoothing Resolution:** In synthetic raster tests, continuous DEM smoothing compressed TWI scores into a narrow band (mean 6.8–7.3). When evaluated against real point level ground truth in `physical_data.json`, TWI scores showed realistic variance ranging from 7.16 to 12.89.
+2. **Road-Risk Field Status:** Road risk scores currently use a synthetic topographic hazard proxy until Mireye's native road exposure attributes are enabled.
+3. **Shelter Verification:** Athens County, Ohio utilizes verified, real world community shelters (Athens Community Center & Athens High School), other regions utilize geographically distributed benchmark facilities that should be verified with local emergency management agencies prior to deployment.
 
-## 👥 Contributors
 
-* **Shahzeb Ali** — *Lead Architecture & Development* ([@ShahzebAli9826](https://github.com/ShahzebAli9826))
-
----
 
 ## 📄 License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. Built with physical intelligence powered by **Mireye**.
