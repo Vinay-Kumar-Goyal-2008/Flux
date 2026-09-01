@@ -2,8 +2,7 @@
 
 # FLUX: AI-Powered Multimodal Satellite Flood Detection & Autonomous Disaster Response System
 
-<p align="center">
-  <b>Flux is an autonomous conversational agent that bridges large language models with real time physical world infrastructure data. Powered by OpenAI GPT-4o and the MirEye Earth API, Flux handles open ended conversational tasks while dynamically routing location sensitive queries to verified spatial, hydrological and environmental hazard tools across the United States.
+<b>Flux is an autonomous conversational agent that bridges large language models with real time physical world infrastructure data. Powered by OpenAI GPT-4o and the MirEye Earth API, Flux handles open ended conversational tasks while dynamically routing location sensitive queries to verified spatial, hydrological and environmental hazard tools across the United States.
   
 Emergency managers, field responders and residents often lack instant verified physical world context during extreme weather events, forcing them to manually consult disjointed federal GIS portals. By fusing dual encoder satellite Earth observation (SAR + Optical) with Mireye's sub meter physical intelligence layer, continuous Topographic Wetness Index hydrology, and an in flight human in the loop decision engine, Flux identifies imminent flash flood zones, dynamically routes evacuees away from submersed corridors, and empowers incident commanders in real time. Flux bridges conversational AI with real time geospatial ground telemetry i.e. users ask questions about any US city, county or landmark in plain English and Flux automatically resolves place names into coordinates, queries MirEye's sub meter Earth observation API and delivers actionable safety insights backed by authoritative federal citations (USGS, FEMA, NOAA).</b>
 </p>
