@@ -12,7 +12,7 @@ Emergency managers, field responders and residents often lack instant verified p
 
 ---
 
-## 📌 Executive Overview
+##  Executive Overview
 
 During major flood disasters, emergency response operations suffer from two fatal blind spots:
 
@@ -23,7 +23,7 @@ Flux bridges this gap by injecting physical telemetry from the Mireye API (USGS 
 
 ---
 
-## 🧠 Deep Learning Architecture & Pipeline
+##  Deep Learning Architecture & Pipeline
 
 Flux implements a custom **Dual-Encoder Multimodal SegFormer architecture** specifically optimized for high-precision flood boundary delineation in challenging weather and all-terrain scenarios.
 
@@ -79,7 +79,7 @@ To prove that the Mireye coordinate round-trip performs critical life-safety wor
 Context aware routing altered the primary shelter recommendation in 6.1% of disaster clusters, accepting an average of +1.15 km of travel to steer evacuees away from high risk, flood compromised access corridors.
 
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 Mireye/
